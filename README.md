@@ -16,6 +16,19 @@ DeepSeek Harness（DSH）Web UI 外观美化插件（Client 端持久插件）�
 
 ## 安装
 
+### 官方方式（推荐，v1.2+）
+
+需要 pnpm（`npm install -g pnpm`）：
+
+```bash
+dsh plugin --profile web add github:Zalpha263/dsh-ui-beautify
+```
+
+已发布到 npm 后可直接 `dsh plugin --profile web add dsh-ui-beautify`。装完重启 DSH。
+升级/卸载：`dsh plugin --profile web update/remove dsh-ui-beautify`。
+
+### 手动方式（v1.2 之前）
+
 > 重要：DSH 用**两个不同的解析锚点**加载插件包——**宿主行导入**从 **profile 目录**解析，**client 半区扫描**（`dsh-client-modules`）从 **dsh 安装目录**解析。所以本包需要**两份副本**（必须保持同步），缺一份都会导致加载失败（见「排错」）。
 
 ### 1. 找到两个目标目录
@@ -95,6 +108,7 @@ cp -r ./dsh-ui-beautify "$HOME/.dsh/profiles/web/node_modules/dsh-ui-beautify"
 
 ## 版本历史
 
+- **v1.2.0**：支持 dsh 官方 bundle 安装（`dsh.bundle.patch` + 自带 `cordis.patch.yml`），可用 `dsh plugin --profile web add github:Zalpha263/dsh-ui-beautify` 一键安装，不再需要手动两份副本。
 - **v1.1.2**：修复「重启后背景图片消失」——大图 base64 超出 localStorage 配额被静默丢弃；上传时自动压缩（最长边 ≤2560px，JPEG 0.85），保存失败时输出控制台警告。
 - **v1.1.1**：修复「设置背景图片后切换配色预设会覆盖图片」——预设应用后重新注册背景遮罩 token，图片仅由「清除」移除。
 - **v1.1.0**：设置自动记忆，重启后自动恢复。
