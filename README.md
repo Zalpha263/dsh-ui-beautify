@@ -93,17 +93,3 @@ cp -r ./dsh-ui-beautify "$HOME/.dsh/profiles/web/node_modules/dsh-ui-beautify"
 直接编辑 `lib/client.js`（调色板在 `PRESETS` 常量里），保存后重启 DSH 生效；
 无需构建（本包是手写 loader 格式，非 tsdown 产物）。改完记得同步两份副本。
 
-## 发布到开源社区
-
-本插件是 MIT 许可的独立包，可直接上传到 GitHub：
-
-```bash
-git init
-git add .
-git commit -m "dsh-ui-beautify: theme presets + background image for DSH web UI"
-# 在 GitHub 建仓库后：
-git remote add origin https://github.com/<你的用户名>/dsh-ui-beautify.git
-git push -u origin main
-```
-
-他人安装：clone 仓库 → 按上文「安装」步骤复制两份副本 + 写注册行 + 重启即可。
