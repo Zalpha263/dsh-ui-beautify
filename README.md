@@ -94,6 +94,7 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ## 版本历史
 
+- **v1.3.2**：修复「重启 DSH / 重载插件后背景图片丢失」——插件卸载清理时不再写入 localStorage（`clearBackgroundImage` 增加持久化开关，仅用户主动「清除 / 重置」才写存储）；恢复顺序改为先恢复背景图再应用预设，避免覆盖。
 - **v1.3.1**：修复「会话列表加载螺旋仍为蓝色」——会话行左侧的进行中状态动画（StateDot）直接引用静态 token `--dsw-static-deepseek-450`，现一并纳入预设覆盖。
 - **v1.3.0**：全局强调色跟随预设——工作区文件夹图标、「对话 / 轨迹」标签高亮、Deep Diving 状态流光、超链接、轨迹时间线等蓝色元素统一变为预设强调色（浅色/深色模式均生效）。
 - **v1.2.0**：支持 dsh 官方 bundle 安装（`dsh.bundle.patch` + 自带 `cordis.patch.yml`），`dsh plugin --profile web add github:Zalpha263/dsh-ui-beautify` 一键安装，不再需要手动两份副本。
