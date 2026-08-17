@@ -1,7 +1,7 @@
 {
   "name": "dsh-ui-beautify",
-  "description": "Customize the DeepSeek Harness web UI: theme color presets (main area, sidebar, message bubble, send button), full-page background image, plus a VSCode-style card layout engine (dock/undock/float panels, tabbed dock host) — all reversible and light/dark aware.",
-  "version": "1.7.10",
+  "description": "Customize the DeepSeek Harness web UI: theme color presets (main area, sidebar, message bubble, send button), full-page background image, plus a VSCode-style card layout engine (dock/undock/float panels, unified plugin panel with launcher + tabbed host) — all reversible and light/dark aware.",
+  "version": "1.8.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
