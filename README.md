@@ -17,7 +17,7 @@
 
 ### 前置要求
 
-- DSH `0.1.0-rc.6`（本插件针对该版本的 Web 客户端编写，见「兼容性」）
+- DSH `0.1.0-rc.7`（本插件针对该版本的 Web 客户端编写，见「兼容性」）
 - 官方安装方式需要 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）
 
 ### 官方方式（推荐）
@@ -92,7 +92,7 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ## 兼容性
 
-- 目标版本：DSH `0.1.0-rc.6`，Web 界面（Windows / Linux / macOS）
+- 目标版本：DSH `0.1.0-rc.7`，Web 界面（Windows / Linux / macOS）
 - 部分样式选择器（消息气泡、发送按钮、侧边栏淡出层等）针对该版本的客户端产物编写，**DSH 大版本升级后可能失效**，升级后请在「外观美化」里复核效果
 - 背景图以压缩后的 data URL 存在浏览器 `localStorage`（约 5MB 配额内）；超大图片上传时会自动压缩到最长边 ≤2560px
 
