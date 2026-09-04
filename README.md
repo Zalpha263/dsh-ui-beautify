@@ -91,6 +91,7 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ## 版本历史（最新在前）
 
+- **v1.13.0**：适配 DSH 0.1.2-rc.1 + 审计清理——① 移除已失效的「消息时间悬停」扩展（宿主新版改用 `data-actions-reveal` / `data-turn-tail` 原生机制，`[data-time-hover-root]` 已不存在，原委托/诊断/样式全清，保留说明注释）；② 迁移失效的构建哈希选择器到 0.1.2-rc.1（会话列表底部渐隐 `.qDHVXG_fade`→`.bhn1Oq_fade`、气泡底色 `.gdEzaW_bubble`→`.Sixlwa_bubble`，并核对 `.uV2eYG_primary` 未变），注释标注"升级需再核实"；③ 调试浮层的 stats 锚点由哈希类名改为稳定槽位 `[data-slot="conversation.composer.dock"]`；④ 修两处潜在 bug：宿主重挂载自愈后 `dragState` 残留导致所有卡片抓条消失（teardown 置 null）、`headerDrag` 阈值监听缺 `pointercancel` 兜底；⑤ `dsh.client.inject` 幽灵条目清理（本包原本无）。
 - **v1.12.14**：会话区停靠左/右侧的最小缩放宽度提升至 **480px**（软下限：窗口过窄时自动让位、永不溢出），头部按钮行 / 输入工具行不再重叠；侧栏 / 停靠卡的挤压折叠 / 关闭手势不受影响
 - **v1.12.13**：修复中间栏吸附右侧的缩放 / 溢出 bug——有效宽度约束（存储宽度作为偏好，随窗口缩放自动钳制 / 恢复）、停靠把手改贴卡片真实边缘、单独右停靠列序修正（自由轨在固定列左侧）、中间区空出时不再保底 480px（其他卡吸附回中间时自动恢复保底并让出两侧）
 - **v1.12.9**：修复缩放上限溢出（上限 = 窗口 − 对面固定列 − 480，grid 不再溢出）；被挤成浮动的卡片在区域空出后**自动回位**
