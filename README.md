@@ -93,6 +93,7 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ## 版本历史（最新在前）
 
+- **v1.13.2**：修复 `dock` 服务对外不可用的根因——外部插件拿到的是宿主守护式 dynamic ctx（CTX_VERBS 仅放行 `effect/on/once/provide/超时族`，`reflect` 不在其列），原 `ctx.reflect.provide('dock', …)` 会被宿主拒绝，`dock` 服务实际不存在（file-explorer / billing 的坞面板集成因此静默失效，从未生效过）。改为正式契约 `ctx.provide('dock', dockApi)`（与 cordis 同名语义），下游插件的 registerPanel/subscribe 集成自此真正可用。
 - **v1.13.1**：修复「任意插件更新/热重载后 UI 崩溃或布局错乱」——根因：宿主 Web 客户端对**被更新插件的入口**做热替换（HMR `rebuilt` 帧：拆旧纤维 → 移除样式 → 重建），期间宿主会重渲染受影响槽位；布局引擎持有的宿主框架引用（`[data-slot="root"]` 的首个子元素）可能被替换或摘除，而引擎仍对**陈旧节点**做样式写入与门户注入（零尺寸测量 → 面板消失、布局错乱）。修复：① 新增 `resolveFrame()`（引擎全部 17 个入口：布局应用/列标记/拖动/缩放/面板门户等在操作前重新定位宿主框架，仅当节点已脱离文档才重新查询，正常路径零开销）；② 插件面板门户注入增加 `isConnected` 守卫（目标节点不在文档中时跳过本次渲染，下一引擎滴答自动恢复），杜绝门户挂到已摘除节点导致的静默消失；③ 行为保持与 v1.13.0 完全一致（正常路径语义不变）。配合宿主侧验证：任何插件热重载后布局引擎自动自愈，无需手动触发。
 - **v1.13.0**：适配 DSH 0.1.2-rc.1 + 审计清理——① 移除已失效的「消息时间悬停」扩展（宿主新版改用 `data-actions-reveal` / `data-turn-tail` 原生机制，`[data-time-hover-root]` 已不存在，原委托/诊断/样式全清，保留说明注释）；② 迁移失效的构建哈希选择器到 0.1.2-rc.1（会话列表底部渐隐 `.qDHVXG_fade`→`.bhn1Oq_fade`、气泡底色 `.gdEzaW_bubble`→`.Sixlwa_bubble`，并核对 `.uV2eYG_primary` 未变），注释标注"升级需再核实"；③ 调试浮层的 stats 锚点由哈希类名改为稳定槽位 `[data-slot="conversation.composer.dock"]`；④ 修两处潜在 bug：宿主重挂载自愈后 `dragState` 残留导致所有卡片抓条消失（teardown 置 null）、`headerDrag` 阈值监听缺 `pointercancel` 兜底；⑤ `dsh.client.inject` 幽灵条目清理（本包原本无）。
 - **v1.12.14**：会话区停靠左/右侧的最小缩放宽度提升至 **480px**（软下限：窗口过窄时自动让位、永不溢出），头部按钮行 / 输入工具行不再重叠；侧栏 / 停靠卡的挤压折叠 / 关闭手势不受影响
