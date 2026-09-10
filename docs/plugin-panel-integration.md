@@ -1,13 +1,31 @@
-# 插件面板接入规范（`dock` 服务契约 v2）
+# 插件面板接入规范（`sidebarPanel` 服务契约 v1）
 
-> 面向：任何想把界面挂到 DSH Web「插件面板」里的外部插件。
-> 适用版本：`dsh-ui-beautify` ≥ **1.15.0**（`dock.apiVersion === 2`）。
-> 目的：让「新插件接入插件面板」变成一次复制粘贴，而不是一次考古。
+> 面向：任何想把界面挂到 DSH Web「右侧栏插件标签页」里的外部插件。
+> 适用版本：`dsh-ui-beautify` ≥ **2.0.0**（`sidebarPanel.apiVersion === 1`）。
+> 目的：让「新插件接入右侧栏」变成一次复制粘贴，而不是一次考古。
 
-插件面板（🧩 插件面板）是 `dsh-ui-beautify` 提供的一个**统一宿主**：它把所有已注册插件的
-界面收进同一张停靠卡（卡片模式）或右侧第三列（经典模式），并负责芯片行（可用插件清单）、
-标签行（已打开插件）、打开/关闭/浮动/回停靠、以及这些状态的持久化。插件本身不关心布局，
-只需要向宿主**注册一个面板**并提供一段 `mount(el)` 渲染函数。
+---
+
+## 0. 为什么要改（v2.0.0 的重大变更）
+
+≤ 1.15.x 的 `dsh-ui-beautify` 自带一个「插件面板」宿主：自研的芯片行 + 打开顺序标签条 +
+浮动窗 + 停靠拖拽，并把面板渲染进它**自己的第三列网格**（`data-vsc-pp3` +
+`--vsc-pp-cols` 覆盖宿主的 `grid-template-columns`，同时 `layoutSvc.closeDetails()` 关掉
+原生第三列）。
+
+DSH **0.1.5-rc.1** 起，第三列的正式主人是官方右侧栏
+（`dsh-client-ui-sidebar-right`）：它有自己的展开/收起、标签条、浮动、分屏、几何与
+每会话持久化，并通过 `ctx.layout.openRightbar()` 向 AppFrame 报告自己的轨道。两个
+系统抢同一段 grid 模板 —— **这就是「插件面板与官方侧边栏严重冲突」的根因**。
+另外 `ILayout.closeDetails()` 在 0.1.5-rc.1 已被删除，那条调用是失效的。
+
+v2.0.0 的做法：**把插件面板注册成官方右侧栏的一个「页标签类型」**。标签条、增删、
+横向溢出、浮动、分屏、每会话独立状态、撤销重做、引导页胶囊全部由官方 `dockkit`
+负责，`dsh-ui-beautify` 不再碰任何列几何。
+
+对外服务从 `dock`（v1/v2）**改名为 `sidebarPanel`（v1）**。旧名不再提供 —— 找不到服务
+的消费方会走「没装 ui-beautify」的降级路径，这是刻意设计：两个名字同时存在会让插件
+同时往两套 UI 里注册。
 
 ---
 
@@ -23,31 +41,35 @@ window.__ModuleLoader__.load({
 
     const PANEL_ID = 'my-plugin'          // 稳定、唯一、跨版本不变（见 §3.1）
     const PANEL_TITLE = '我的插件'
-    const PANEL_ICON = '🧩'
 
-    /* 面板内容：宿主给一个可滚动的空容器 el，你往里渲染；返回清理函数。 */
+    /* 面板内容：宿主给你一个已经撑满标签正文区的容器 el，你往里渲染；返回清理函数。 */
     function mountPanel(el) {
       const box = document.createElement('div')
       box.textContent = 'Hello from my plugin'
       el.appendChild(box)
-      return () => { el.textContent = '' }   // 必须返回清理函数（见 §3.3）
+      return () => { el.textContent = '' }
     }
 
     function apply(ctx) {
-      /* dock 是【可选】服务：ui-beautify 没装 / 还没加载 / 正在热重载，都不能报错。 */
-      const fiber = ctx.inject(['dock'], (dockCtx) => {
-        const dispose = dockCtx.dock.registerPanel({
-          id: PANEL_ID, title: PANEL_TITLE, icon: PANEL_ICON, mount: mountPanel
+      /* sidebarPanel 是【可选】服务：ui-beautify 没装 / 还没加载 / 正在热重载，
+         都不能报错。没有它时插件必须照常工作（走自己的降级 UI）。 */
+      const fiber = ctx.inject(['sidebarPanel'], (sideCtx) => {
+        const side = sideCtx.get('sidebarPanel')
+        if (side === undefined || side === null || typeof side.registerPanel !== 'function') return
+        const dispose = side.registerPanel({
+          id: PANEL_ID,
+          title: PANEL_TITLE,
+          icon: '🧩',
+          entry: { title: PANEL_TITLE, description: '一句话说明这个面板做什么', order: 100 },
+          mount: mountPanel
         })
-        /* 返回的函数会在 dock 消失（ui-beautify 卸载/热重载）时被调用；
-           dock 重新出现时 cordis 会再跑一遍本回调 —— 无需轮询、无需身份比对。 */
         return () => { try { dispose() } catch (err) {} }
       })
       ctx.effect(() => () => { try { fiber.dispose() } catch (err) {} })
     }
 
     exports.apply = apply
-    exports.inject = ['slots', 'remote']    // 不要在这里写 'dock'（见 §2.1）
+    exports.inject = ['slots']    // 不要在这里写 'sidebarPanel'（见 §2.1）
     return module.exports
   }
 })
@@ -55,79 +77,59 @@ window.__ModuleLoader__.load({
 
 要点：
 
-- `ctx.inject(['dock'], cb)` 是 **cordis 的可选依赖**：`dock` 不在时回调不执行（插件本体照常
-  加载），`dock` 出现时执行，消失时自动清理，再次出现时重新执行。这正是「ui-beautify 热重载
-  后我的面板要回来」所需要的行为。
-- ⚠️ **回调必须是箭头函数**（`(dockCtx) => { … }`）。cordis 用 `isConstructor(cb)` 区分
-  「类插件」与「函数插件」：普通 `function (dockCtx) { … }` 会被 `new` 调用，**返回的清理函数
-  被直接丢弃** —— dock 消失或你的插件卸载时注册会泄漏在宿主里（面板残留、标签关不掉），
-  而且不报任何错。`async` 函数与生成器函数同样安全（它们没有 `prototype`）。
-- **不要**再给 `ctx.inject` 包一层 `ctx.effect(() => () => fiber.dispose())`：子纤维的生命周期
-  已经挂在你的插件纤维上，额外包一层既多余、又容易在「回调被当成类插件」时把问题藏得更深。
-- 如果 `ctx.inject` 不可用（见 §2.2 的守护 ctx），退化为「事件 + 兜底轮询」的绑定器（§2.3）。
-- 注册**不等于**打开：注册后面板只是出现在芯片行，打开与否由用户点击（或你显式调用
-  `openPanel` / `focusPanel`）决定。
+- `ctx.inject(['sidebarPanel'], cb)` 是 **cordis 的可选依赖**：服务不在时回调不执行
+  （插件本体照常加载），出现时执行，消失时自动清理，再次出现时重新执行。
+- ⚠️ **回调必须是箭头函数**。cordis 用 `isConstructor(cb)` 区分「类插件」与「函数插件」：
+  普通 `function (c) { … }` 会被 `new` 调用，**返回的清理函数被直接丢弃** —— 服务消失后
+  注册泄漏在宿主里，且不报任何错。
+- **不要**再把 `ctx.provide('sidebarPanel', …)` 当作消费方接口 —— 那是
+  `dsh-ui-beautify` 自己提供服务的写法。
+- 注册 ≠ 打开：注册只让面板成为右侧栏的一个标签类型（并出现在「开始」引导页上）。
 
 ---
 
-## 2. 拿到 `dock` 服务的三种写法
+## 2. 拿到 `sidebarPanel` 的三种写法
 
-### 2.1 推荐：`ctx.inject(['dock'], cb)`（可选依赖）
+### 2.1 推荐：`ctx.inject(['sidebarPanel'], cb)`（可选依赖）
 
 | 写法 | 结果 |
 |---|---|
-| `ctx.inject(['dock'], cb)` | ✅ 回调在 `dock` 可用时执行、不可用时清理；插件本体不被阻塞 |
-| `exports.inject = ['slots', 'remote', 'dock']` | ❌ 硬依赖：没装 ui-beautify 时**整个插件被 cordis 挂起**，连槽位/远程命名空间都不注册 |
-| `ctx.get('dock')` 只用一次 | ⚠️ 只在 ui-beautify 已加载时有效；加载顺序反过来就永远拿不到 |
+| `ctx.inject(['sidebarPanel'], cb)` | ✅ 服务可用时执行、不可用时清理；插件本体不被阻塞 |
+| `exports.inject = ['slots', 'sidebarPanel']` | ❌ 硬依赖：没装 ui-beautify 时**整个插件被挂起**，连槽位都不注册 |
+| 只用一次 `ctx.get('sidebarPanel')` | ⚠️ 只在 ui-beautify 已加载时有效；加载顺序反过来就永远拿不到 |
 
 ### 2.2 谁会被「守护 ctx」限制
 
-- **profile 安装的插件**（`dsh plugin --profile web add …`，即本仓库的使用方式）走的是浏览器端
-  真正的 cordis，`ctx.inject` / `ctx.on` / `ctx.provide` / `ctx.get` / `ctx.effect` 全部可用。
-- **运行时动态包**（由 agent 通过 cordis 工具加载、代码以字符串下发，走
-  `@deepseek-ai/dsh-cordis-client-runner`）拿到的是守护式 facade：只放行
+- **profile 安装的插件**走浏览器端真正的 cordis，`ctx.inject` / `ctx.on` / `ctx.provide` /
+  `ctx.get` / `ctx.effect` 全部可用。
+- **运行时动态包**（agent 通过 cordis 工具加载，走
+  `@deepseek-ai/dsh-cordis-client-runner`）拿到守护式 facade：只放行
   `effect / on / once / provide / 超时族 / get` 与 `inject` 中声明过的服务，
-  **`ctx.inject` 本身不在白名单里**（调用会抛 `dynamic ctx does not expose "inject"`）。
-- 因此：**先试 `ctx.inject`，抛错再退化**。不要写 `ctx.reflect.provide(...)`（facade 下没有
-  `reflect`），也不要依赖 `ctx.get('dock')` 的**对象身份**做变更检测。
-
-### 2.3 退化绑定器（动态包 / 需要同时支持两者时）
+  **`ctx.inject` 本身不在白名单里**。
+- 因此：**先试 `ctx.inject`，抛错再退化**；退化用 `ctx.get` + `internal/service` 事件
+  + 1s 兜底轮询的**幂等**绑定器（`dsh-deepseek-billing` 的 `bindDockFallback` 是现成范例）。
+  幂等的判据用 `side.has(id)`，**不要**用对象身份比较（守护 ctx 下每次 `get` 都是新 Proxy）。
 
 ```js
-function bindDock(ctx, def) {
-  let dispose = null, bound = false, boundTo = null, stopped = false
-  const unbind = () => { if (dispose) { try { dispose() } catch (e) {} } dispose = null; bound = false; boundTo = null }
+function bindSidebarPanel(ctx, def, onBound) {
+  let dispose = null, bound = false, stopped = false
+  const unbind = () => { if (dispose !== null) { try { dispose() } catch (e) {} } dispose = null; bound = false }
   const sync = () => {
     if (stopped) return
-    const d = ctx.get('dock')
-    if (d === undefined || d === null || typeof d.registerPanel !== 'function') { unbind(); return }
-    /* 已绑定、且当前 host 里确实还有我们的面板 → 幂等跳过（重复事件、轮询都无害）。
-       `has()` 是语义检查，比对象身份可靠；极旧 host 没有 has 时退化为身份比较。 */
-    if (bound) {
-      const alive = typeof d.has === 'function' ? d.has(def.id) : d === boundTo
-      if (alive) return
-      unbind()                       // host 被换掉了：先撤销旧注册，再注册到新 host
-    }
-    try { dispose = d.registerPanel(def); bound = true; boundTo = d } catch (err) { console.error(err); dispose = null; bound = false }
+    const s = ctx.get('sidebarPanel')
+    if (s === undefined || s === null || typeof s.registerPanel !== 'function') { unbind(); return }
+    if (bound) { const alive = typeof s.has === 'function' ? s.has(def.id) : true; if (alive) return; unbind() }
+    try { dispose = s.registerPanel(def); bound = true; if (onBound) onBound(true) } catch (err) { console.error(err); dispose = null; bound = false }
   }
-  sync()                             // ① 先试一次（dock 可能已经在了）
-  const off = ctx.on('internal/service', (name) => { if (name === 'dock') sync() })  // ② dock 变化时同步
-  const timer = window.setInterval(sync, 1000)                                        // ③ 兜底：加载顺序竞态
+  sync()
+  const off = ctx.on('internal/service', (name) => { if (name === 'sidebarPanel') sync() })
+  const timer = window.setInterval(sync, 1000)
   ctx.effect(() => () => { stopped = true; off(); window.clearInterval(timer); unbind() })
 }
 ```
 
-关键点是 `sync()` **幂等**：它只做「没绑定就绑定、绑定了但不是当前 host 的就重绑」，所以重复事件、
-轮询、事件顺序颠倒都不会导致面板被反复注销重注册（那会让用户正在看的面板莫名关闭）。
-
-`internal/service` 是 cordis 的内置事件：`ctx.provide(name, value)` 在**注册与注销时**都会
-emit 它，参数为 `(name, value)`（注销时 `value` 为 `undefined`）。它在 provider 的 fiber 从
-LOADING 变 ACTIVE 之后触发，因此回调里 `ctx.get('dock')` 一定拿得到新服务。两个必须注意的点：
-
-1. **同一次注册可能 emit 多次** —— cordis 在 fiber 状态迁移时会再次通知该 fiber 提供的服务
-   （实测一次 `provide` 会收到 2 个 `on`）。所以绑定器必须**幂等**（已绑定就跳过），
-   不要假设「一个事件 = 一次变更」；用 §2.3 里的 `bound` 标志即可。
-2. **事件是全局的** —— 任何服务的注册/注销都会走它，必须先 `name === 'dock'` 过滤。
+`internal/service` 是 cordis 内置事件：`ctx.provide(name, value)` 在**注册与注销时**都会
+emit 它（注销时 `value` 为 `undefined`）。同一次注册可能 emit 多次，所以 `sync()` 必须幂等。
 
 ---
 
@@ -137,162 +139,157 @@ LOADING 变 ACTIVE 之后触发，因此回调里 `ctx.get('dock')` 一定拿得
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `id` | `string` | ✅ | 面板唯一标识，**同时是持久化键**。要求：非空、小写、带插件名前缀（`my-plugin`），**跨版本永不修改** —— 改 id 等于清空用户的开合状态与浮动窗口几何。 |
-| `title` | `string` | ✅ | 标签与芯片上的显示名。建议中文 2–6 字（标签标题超过 132px 会省略号截断）。 |
-| `icon` | `string` | ➖ | 单个 emoji（默认 `🧩`）。 |
-| `mount` | `(el) => (() => void) \| void` | ✅ | 渲染函数，见 §3.3。 |
+| `id` | `string` | ✅ | 面板唯一标识，**同时是标签类型 kind 与持久化键**。要求：非空、带插件名前缀（`my-plugin`）、**跨版本永不修改** —— 改 id 等于换了一个标签类型，用户已打开的标签会变成孤儿。 |
+| `title` | `string` | ✅ | 标签芯片与引导页上的显示名。 |
+| `icon` | `string` | ➖ | 装饰用（emoji 即可）。当前引导页统一画 🧩，此字段保留给后续版本。 |
+| `entry` | `{title?, description?, order?}` | ➖ | 有它才在右侧栏「开始」引导页上出现入口胶囊。`order` 升序，越小越靠前（官方文件浏览器是 10，建议插件用 100+）。 |
+| `render` | `() => ReactElement` | ✅/➖ | React 面板，与 `mount` **二选一**。 |
+| `mount` | `(el) => (() => void) \| void` | ✅/➖ | 纯 DOM 面板，与 `render` 二选一。 |
 
-返回：**disposer 函数**，调用即注销该面板（关闭并从芯片行、持久化里移除）。
+返回：**disposer 函数**，调用即注销该标签类型。同一 `id` 重复调用 = 刷新定义（返回新的
+disposer），旧的 disposer 不会误删后来者。
 
-行为要点：
+校验失败会抛 `TypeError`（缺 id / 缺 title / 既没有 render 也没有 mount），便于开发期立刻发现。
 
-- **注册 ≠ 打开**：注册只让面板出现在芯片行；`open` 由用户点击或 `openPanel/focusPanel` 决定。
-- **同一 id 重复注册 = 刷新定义**（v1.15.0 起）：`title/icon/mount` 更新为新值，
-  `open / float / 打开顺序 / 窗口几何` **全部保留**，返回的 disposer 依然有效。
-- **disposer 带身份校验**：只有当该 id 仍指向你注册的那份 def 时才注销 —— 旧句柄不会误删
-  后来接管的注册。想「重新注册」时直接再调一次 `registerPanel` 即可，不必先 dispose。
-- **id 冲突**：后注册者接管（last writer wins）。请用带插件名的 id 避免撞名。
-- `def` 校验失败会**抛 `TypeError`**（缺 id / 缺 mount），便于在开发期立刻发现。
-
-### 3.2 完整 API（`dock.apiVersion === 2`）
+### 3.2 完整 API（`sidebarPanel.apiVersion === 1`）
 
 | 成员 | 说明 |
 |---|---|
-| `apiVersion` | `2`。消费方用 `dock.apiVersion >= 2` 做特性探测，不要靠 API 名猜行为。 |
-| `registerPanel(def)` | 注册/刷新面板，返回 disposer。 |
-| `openPanel(id)` | 打开（从关闭态打开会取新的**打开序号**，即排到标签末尾）。**不改变当前激活标签**（保持旧语义，供状态同步调用）。 |
-| `focusPanel(id)` | 打开并**切换到**该面板（芯片行/菜单点击用）。已打开且已激活时为 no-op；浮动态不抢焦点。 |
-| `closePanel(id)` | 关闭该面板（面板本身不消失，只是回到芯片行的「未打开」态）。 |
-| `floatPanel(id)` / `dockPanel(id)` | 脱离成浮动窗口 / 回停靠。**不改变打开序号**（面板留在原来的标签位置）。 |
-| `isOpen(id)` | 是否处于打开态（含浮动态）。 |
+| `apiVersion` | `1`。消费方用 `sidebarPanel.apiVersion >= 1` 做特性探测，不要靠 API 名猜行为。 |
+| `registerPanel(def)` | 注册 / 刷新面板，返回 disposer。 |
 | `has(id)` | 该 id 是否已注册。 |
-| `active()` | 当前激活（正在显示）的标签 id，没有则 `null`。面板可据此判断「我是不是当前可见的」。 |
-| `mode()` | `'card'`（卡片模式）或 `'classic'`（经典三列）。 |
-| `subscribe(fn)` | 订阅引擎变化（打开/关闭/浮动/回停靠/模式切换），返回退订函数。用于把自己的按钮高亮与宿主状态对齐。 |
+| `openPanel(id)` | 在当前会话的右侧栏里打开或聚焦该标签（同时展开列）。**返回 `false`** 表示当前没有挂载的会话 seat 或服务缺失 —— 官方对「没有 session 可作用」是 fail loudly，这里吞掉异常并返回布尔值。 |
+| `focusPanel(id)` | 与 `openPanel` 等价（保留给旧调用点）。 |
+| `closePanel(id)` | 关闭该标签（仅当它是当前激活标签时生效），返回是否关闭。 |
+| `isOpen()` | 右侧栏当前是否展开。**只读**，不改变列几何。 |
 
-### 3.3 `mount(el)` 的生命周期（最容易踩）
+### 3.3 `mount(el)` / `render()` 的生命周期
 
-- 宿主把面板内容渲染在一个 **`flex:1; overflow:auto; minHeight:0`** 的容器里，`el` 就是这个容器；
-  它已经带滚动，面板不要重复套一层全高滚动区（需要贴底布局时给内部元素 `height:100%`）。
-- **每次切换标签都会先 unmount 上一个面板、再 mount 新面板**：卸载时会调用你返回的清理函数，
-  并把容器 `textContent` 清空。所以 `mount` 必须「可重复调用、状态自己持有、DOM 全部重建」，
-  不能假设自己的 DOM 一直活着。
-- **必须返回清理函数**（或在内部用 `ctx.effect` 登记）：定时器、全局监听、`body` 级浮层、
-  自建 React root 都要在那里释放。返回非函数、非空值会抛错。
-- **不要在 `mount` 里改引擎状态**（`openPanel/closePanel/floatPanel` 等）：`mount` 由 React 的
-  effect 调用，此时改状态会触发引擎重渲染，可能把刚挂上的面板再卸一次。这类动作只放在
-  用户手势（按钮点击）里。
-- 同一时刻一个面板只存在一份：停靠态渲染在插件面板里，浮动态渲染在独立浮窗里，二者互斥。
+- 面板正文由**官方右侧栏**渲染在 `_.P3OORG_panelBody{flex:auto;min-height:0;display:flex}`
+  里。宿主给你的 `el` 是一个类名为 **`dsh-sidebar-panel-host`** 的容器，它已经带好了
+  这条**布局契约**（v2.0.1 起）：
 
-### 3.4 标签顺序与焦点语义（v1.15.0 起）
+  | 属性 | 值 | 为什么 |
+  |---|---|---|
+  | `width` / `flex` | `100%` / `flex:auto` | 撑满 pane body，**不靠内容自然宽度** |
+  | `min-width` | `0` | flex 项默认 `min-width:auto`，长文件名会把整行撑宽并让祖先出现横向滚动 |
+  | `overflow` | `hidden` | 兜住越界内容，绝不让面板把侧边栏挤宽 |
+  | `display` / `flex-direction` | `flex` / `column` | 让插件根节点的 `height:100%` 有确定的父高度（block 父级下 `height:100%` 会解析为 `auto`，面板塌成内容高度） |
+  | `container-type` | `inline-size` | 插件可以按**面板自身宽度**做响应式，而不是按窗口宽度 |
 
-- **标签顺序 = 打开顺序**（先打开的靠左），与插件注册顺序无关。
-- **关闭标签**：该标签消失，其余标签的相对顺序不变；若关掉的是当前激活标签，焦点交给它的
-  **左邻**（没有左邻则取右邻），都没有就进入空态。
-- **重新打开**：取一个新的打开序号 → 排到**最末尾**（与浏览器标签一致）。
-- **浮动 / 回停靠**：面板仍算「打开」，序号不变，回停靠后回到原来的标签位置。
-- **芯片行顺序 = 注册顺序**（这是「可用插件清单」，顺序稳定才好找）。
-- 顺序持久化在 `localStorage['dsh.layout-studio:state']`（`panels[id].order` + 顶层
-  `panelSeq` 计数器），刷新页面后保持；旧版本遗留的状态没有 `order`，会按注册顺序排在前，
-  首次打开后自动补号。
+- **宽度不是固定的**：右侧栏的宽度来自官方列几何求解，**首开默认占 frame 的 45%、下限
+  300px**（`layout` 的 `RIGHTBAR_MIN` / `RIGHTBAR_DEFAULT_RATIO`），窗口小于 768px 时官方
+  会自动全屏。所以面板宽度在 300px ~ 全屏之间变化，**不要按旧的 400/560px 假设写死布局**。
 
-### 3.5 持久化结构（消费方只需知道两件事）
+- **窄面板标记**：宿主的 `ResizeObserver` 量的是**面板自身**宽度，`< 420px` 时给容器加
+  `data-dsh-narrow` 属性。面板可以直接吃它：
 
-```jsonc
-{
-  "panels": {
-    "my-plugin": { "open": true, "float": false, "order": 3, "x": 140, "y": 80, "w": 560, "h": 420 }
-  },
-  "panelSeq": 3,          // 单调递增的打开序号计数器
-  "pluginPanel": { "open": true, "float": false /* … */ }
-}
-```
+  ```css
+  [data-dsh-narrow] .my-row { /* 收字号、隐藏次要列 */ }
+  /* 或者用宿主提供的容器查询 */
+  @container dshpanel (max-width: 420px) { /* … */ }
+  ```
 
-1. `id` 是这份状态的键 —— **改 id 就丢状态**。
-2. 不要自己写这两个键：面板的开合/浮动/几何/顺序一律通过 dock API 操作。
-3. 宿主在被卸载（热重载/停用）后**不会再写这份存储**，所以消费方在旧实例上执行注销不会
-   覆盖新实例已经恢复的状态 —— 但消费方仍应尽快用幂等 `sync()` 重绑，别让面板长时间缺席。
+  兼容说明：宿主还会给面板内带 `.fexp-panel` 类的元素补 `.fexp-narrow`，这是为了让
+  早期按「窗口宽度」判断紧凑模式的消费方（file-explorer）不用改造就生效。
 
----
+- **面板身份标记**：容器上带 `data-dsh-panel-id="<你的 id>"`。官方标签条已经在显示标题
+  和关闭按钮，所以如果你的面板自己还画了标题栏 / 关闭按钮，在宿主里就是重复的一份 ——
+  需要的话可以据此隐藏（纯 CSS 也行：`[data-dsh-panel-id] .my-titlebar { display:none }`）。
+  注意 `render()` 型面板拿不到这个容器，需要自行处理。
 
-## 4. 生命周期时序
+- **每次标签切换/会话切换都会卸载再挂载**：卸载时调用你返回的清理函数。所以
+  `mount` 必须「可重复调用、状态自己持有、DOM 全部重建」。
 
-```
-① 页面加载
-   profile bundle 顺序 … → dsh-ui-beautify 加载 → ctx.provide('dock', dockApi)
-   → provider fiber 变 ACTIVE → cordis emit internal/service('dock', dockApi)
-   → 你的 ctx.inject(['dock'], cb) 回调执行（或退化绑定器收到事件）
-   → dock.registerPanel(def) → 芯片行出现你的插件（未打开）
+- **必须返回清理函数**（或在内部用 `ctx.effect` 登记）：定时器、全局监听、自建 React root
+  都在那里释放。
 
-② 用户点击芯片
-   focusPanel(id) → panels[id].open = true、order = ++panelSeq、激活该标签
-   → DockPanelBody 渲染 PanelMount → mount(el) 被调用
+- 标签的**开合、浮动、分屏、几何、每会话状态**全部由官方负责并持久化。插件不要自己写
+  `localStorage`、不要自己画浮动窗、更不要碰 `grid-template-columns`。
 
-③ 用户切换标签
-   上一个面板 unmount（调用你的清理函数）→ 新面板 mount(el)
+### 3.4 与官方右侧栏其它标签的关系
 
-④ 用户点击标签的 ×
-   closePanel(id) → open = false → 面板 unmount；序号保留但重开会重新取号
-
-⑤ 用户点面板 ×（关闭整个插件面板）
-   closeDock() → 所有面板 open = false，标签行消失（芯片行仍在）
-
-⑥ ui-beautify 热重载 / 卸载
-   旧 fiber 销毁 → dock 注销（internal/service 再次 emit，value = undefined）
-   → 你的注册随旧 host 一起作废 → 你返回的清理函数被执行
-   → 新 fiber provide 新的 dock → 你的回调再跑一次 → 面板回到芯片行
-```
+- 右侧栏是**每会话**的：同一插件在不同会话里可以各自开着自己的标签。
+- 引导页规则（官方 `defaultSeed`）：**全系统引导入口恰好只有 1 个**时，新会话的列直接
+  种成那个类型；**0 个或多个**时显示「开始」引导页。所以接入插件会让默认视图从「文件」
+  变成「开始」引导页 —— 这是官方多入口时的既定设计。
+- 打开入口有三个，都归官方：引导页胶囊、标签条上的 `+`（列出所有 page 类型）、以及
+  插件自己调用 `openPanel(id)`。
 
 ---
 
-## 5. 反模式清单（都是真实踩过的）
+## 4. 反模式清单
 
 | ❌ 错误写法 | 症状 | ✅ 正确做法 |
 |---|---|---|
-| 注册成功后**再也不复查** dock | ui-beautify 热重载/重装后，你的面板从插件面板消失（只剩别的插件） | `ctx.inject(['dock'], cb)`，或监听 `internal/service` 重绑 |
-| 在轮询里**无条件重注册**（或 dispose 后立刻重注册） | 旧版会重置 `open` 状态 → 标签闪烁/面板自动关闭；新版虽已幂等刷新，但仍是无效开销 | 用 §2.3 的**幂等 `sync()`**（`d.has(id)` 检查后再决定是否注册） |
-| 用 `ctx.get('dock') !== 上次的值` 判断服务是否更换 | 在守护 ctx 下每次 `get` 都是新 Proxy，判断恒为真 → 每轮都注销重注册；在 profile ctx 下当前虽成立，但这不是契约 | 用 `ctx.inject` 或 `internal/service` 事件 |
-| `exports.inject = [..., 'dock']` | ui-beautify 未安装时插件被挂起，连槽位都不注册 | 可选服务用 `ctx.inject(['dock'], cb)` |
-| `ctx.reflect.provide('dock', …)` / 依赖 `ctx.reflect` | 动态包 facade 下抛错 | 只用 `ctx.provide` / `ctx.inject` / `ctx.on` / `ctx.effect` / `ctx.get` |
-| `mount` 里不返回清理函数 | 切标签后定时器/监听/浮层泄漏，面板越切越卡 | 返回清理函数，或内部 `ctx.effect` 登记 |
-| `ctx.inject(['dock'], function (c) { … return cleanup })` | 回调被 cordis 当成类插件 `new` 了一次，**返回的清理函数被丢弃**：dock 消失/插件卸载后注册泄漏（面板残留） | 用箭头函数：`ctx.inject(['dock'], (c) => { … return cleanup })` |
-| `mount` 里调用 `openPanel/closePanel` | 引擎重渲染期间自我卸载 | 只放在用户手势里 |
-| 面板 DOM 直接挂到 `document.body` | 宿主重挂载后残留、层级错乱 | 只渲染进 `mount` 给的 `el` |
-| 改 `id` 来「修 bug」 | 用户的开合状态与浮动窗口位置被清空 | id 一次定终身；要改语义就换新 id 并做迁移 |
-| 在 `registerPanel` 前后假设「注册即打开」 | 面板没显示，误以为注册失败 | 注册后按需 `openPanel` / `focusPanel` |
+| 继续用 `ctx.get('dock')` / `dock.registerPanel` | 服务不存在 → 面板永远不出现（或走降级 UI） | 改用 `sidebarPanel` |
+| 注册成功后**再也不复查** | ui-beautify 热重载/重装后面板从右侧栏消失 | `ctx.inject(['sidebarPanel'], cb)` 或监听 `internal/service` 重绑 |
+| 用对象身份判断服务是否更换 | 守护 ctx 下每次 `get` 都是新 Proxy → 每轮都注销重注册 | 用 `side.has(id)` 做幂等判据 |
+| `exports.inject = [..., 'sidebarPanel']` | 没装 ui-beautify 时插件被挂起 | 可选服务用 `ctx.inject` |
+| `mount` 里不返回清理函数 | 切标签后定时器/监听泄漏 | 返回清理函数 |
+| `ctx.inject(['sidebarPanel'], function (c) { … })` | 回调被 `new`，清理函数被丢弃 → 注册泄漏 | 用箭头函数 |
+| 自己改 `grid-template-columns` / 盖 `data-vsc-pp3` | 与官方右侧栏抢轨道（v1.x 的老毛病） | 交给官方，插件只注册标签 |
+| 改 `id` 来「修 bug」 | 用户已开的标签变孤儿、状态丢失 | id 一次定终身 |
+| 假设「注册即打开」 | 面板没显示，误以为注册失败 | 引导页/标签条点开，或显式 `openPanel` |
 
 ---
 
-## 6. 自测清单
+## 5. 自测清单
 
-接入完成后，用浏览器实测这几条（全部通过才算接好）：
-
-1. **首屏**：刷新页面，插件出现在芯片行，面板未被强制打开。
-2. **打开/切换**：点击芯片 → 面板出现且内容渲染；再开第二个插件 → 标签行出现两个标签，
-   顺序为「先打开的靠左」，点标签能切换内容。
-3. **关闭**：标签 × 关闭 → 标签消失、面板回到「未打开」；关掉当前激活标签时焦点落在左邻。
-4. **重开顺序**：把关闭的那个再打开 → 它排到标签末尾。
-5. **浮动/回停靠**：标签的 ⧉ → 变成浮动窗口；「回停靠」→ 回到原来的标签位置。
-6. **热重载**：修改 ui-beautify 的 `lib/client.js`（或重装）→ 面板应自动回到芯片行，
-   不需要刷新页面、不需要重启 `dsh web`。
-7. **插件卸载**：禁用/卸载你的插件 → 芯片与标签都消失，`localStorage` 里不留 `panels[id]` 残行。
-8. **持久化**：刷新页面 → 打开的面板、标签顺序、浮动窗口几何全部保持。
-9. **窄面板**：把插件面板拖到最窄 → 芯片行/标签行横向滚动，滚动条与内容之间有留白，
-   芯片与标签不被裁切。
-10. **无 ui-beautify**：临时移除 ui-beautify → 插件本体正常加载，只是没有插件面板集成，
-    控制台不报错。
+1. **引导页**：刷新页面 → 右侧栏「开始」页上出现你的入口胶囊（不是自动开成标签）。
+2. **打开**：点胶囊 → 右侧栏出现你的标签，正文渲染正常。
+3. **并存**：与官方「文件」标签并排；点标签能切换；标签条溢出时可横向滚动。
+4. **浮动 / 分屏**：标签菜单里的浮动、分屏由官方提供，行为与官方标签一致。
+5. **每会话**：切到另一个会话 → 各自独立的标签状态。
+6. **热重载**：修改 ui-beautify 的 `lib/client.js`（或重装）→ 标签自动回到右侧栏，
+   不需要刷新页面。
+7. **卸载**：禁用/卸载你的插件 → 标签与引导页胶囊一起消失。
+8. **无 ui-beautify**：临时移除 ui-beautify → 插件本体正常加载，走自己的降级 UI，
+   控制台不报错。
 
 ---
 
-## 7. 版本与兼容约定
+## 6. 版本与兼容约定
 
-> 参考实现：`dsh-deepseek-billing` v0.1.22 与 `dsh-file-explorer` v1.10.2 均已按本规范接入
+> 参考实现：`dsh-file-explorer` 与 `dsh-deepseek-billing` 均已按本规范接入
 > （可选依赖 + 箭头函数回调 + 守护 ctx 的幂等退化绑定器），可以直接对照它们的 `apply`。
 
-- `dock.apiVersion` 是**能力号**，只在出现不兼容变更时递增；新增动词/字段不会改它。
-  消费方按 `>= N` 探测，不要按名字猜。
-- 面板状态（`open/float/order/几何`）永远由宿主持有并持久化；插件不得直接写
-  `localStorage['dsh.layout-studio:state']`。
-- ui-beautify 未安装时：`ctx.inject(['dock'], cb)` 永不执行，插件其余功能必须照常工作 ——
-  所有面板集成代码都应放在那个回调里，或先做 `typeof d.registerPanel === 'function'` 守卫。
+- `sidebarPanel.apiVersion` 是**能力号**，只在出现不兼容变更时递增；新增动词/字段不会改它。
+  消费方按 `>= N` 探测。
+- 面板的**打开状态、浮动、几何、标签顺序**永远由官方右侧栏持有并持久化；
+  插件不得直接写任何 `localStorage` 键。
+- ui-beautify 未安装时：`ctx.inject(['sidebarPanel'], cb)` 永不执行，插件其余功能必须
+  照常工作 —— 所有面板集成代码都应放在那个回调里，或先做
+  `typeof side.registerPanel === 'function'` 守卫。
 - 本规范随 `docs/` 一起发布（`package.json` 的 `files` 已包含 `docs`）。
+
+---
+
+## 7. 实机验证清单（改完必须实测）
+
+静态检查（`node --check`、契约冒烟测试）只能保证接线正确，**观感与宿主行为必须用浏览器实测**。
+本仓库的安装方式是 Junction（`~/.dsh/profiles/web/node_modules/dsh-ui-beautify` →
+本目录），所以仓库工作区**就是运行中的副本**，改完刷新页面即可生效。
+
+改完 `lib/client.js` 后按顺序做这 9 步：
+
+| # | 操作 | 期望 |
+|---|---|---|
+| 1 | 硬刷新页面（Ctrl+F5） | 右侧栏不再被插件的样式/网格覆盖；左侧栏、对话区、右侧栏三段都正常 |
+| 2 | 切到「经典」模式再切回「卡片」 | 两种模式都不残留第三方网格；刷新后状态保持 |
+| 3 | 卡片模式：拖动左侧栏卡片顶栏 | 卡片脱离成浮动窗，落到上/下/左/中/右能吸附回位，`Esc` 取消 |
+| 4 | 展开右侧栏（对话区右上角的镜像按钮） | 出现「开始」引导页，页面上有**多个**入口胶囊（官方的「工作区文件」+ 各插件的入口） |
+| 5 | 点插件入口胶囊 | 右侧栏出现该插件的标签，与「文件」标签并排；正文渲染完整（不是空白/不是"nothing can view this"） |
+| 6 | 标签菜单里试**浮动**，再**回停靠** | 官方浮动窗出现、几何可拖、回停靠后回到原标签位 |
+| 7 | 切换会话 | 每个会话各自独立的标签状态；切回来时之前开的标签还在 |
+| 8 | 改动 `lib/client.js` 触发 ui-beautify 热重载 | 标签自动回到右侧栏（不需要刷新页面，不需要重启 `dsh web`）；若 1 秒内没回来即为自愈逻辑失效 |
+| 9 | 临时禁用 ui-beautify（改 profile 的 `cordis.patch.yml`） | 下游插件（文件浏览器 / 峰谷计费）回到各自的降级 UI：标题栏按钮 / 独立浮动卡，控制台不报错 |
+
+补充说明：
+
+- 若第 4 步**完全没有出现引导页**（右侧栏直接开成「文件」标签），说明插件没注册进去 ——
+  检查控制台是否有 `sidebarPanel` 相关错误，以及 `ctx.sidebarRightTabs` 是否真的可用。
+- 若第 8 步标签没回来，说明 `panelSeatAlive()` 的自愈没生效（宿主可能换了槽位声明却没换
+  服务实例），此时应能在 1 秒内看到重新注册。
+- **不要**为了让第 5 步好看而让插件去写 `grid-template-columns` —— 那正是 1.15.x 与官方
+  右侧栏冲突的根因。
