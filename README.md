@@ -12,7 +12,7 @@
 
 ## 安装
 
-前置要求是 DSH **`0.1.5-rc.1`** 及以上（本插件针对带官方右侧栏的 Web 客户端编写），官方安装方式还需要 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）。
+前置要求是 DSH **`0.1.5-rc.2`** 及以上（本插件针对带官方右侧栏的 Web 客户端编写），官方安装方式还需要 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）。
 
 ```bash
 # 发布态（推荐：钉死提交，避免 install 时回退到旧版本）
@@ -56,7 +56,7 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ## 兼容性
 
-本插件面向 DSH **`0.1.5-rc.1`** 的 Web 界面（Windows / Linux / macOS）编写，依赖该版本起官方提供的右侧栏标签系统（`sidebar-right` 的 `sidebarRightTabs` / `sidebar.right.pane.tab`）。部分样式选择器（消息气泡、发送按钮、侧边栏淡出层等）针对当前客户端产物，**DSH 大版本升级后可能失效**，升级后请在「外观美化」里复核效果；布局引擎按宿主稳定的 `data-slot` 锚点与两列网格交互，并在每次操作前重新定位宿主框架，因此任意插件热重载导致的宿主重渲染都能自愈。背景图以压缩后的 data URL 存在浏览器 `localStorage`（约 5MB 配额内），超大图片上传时会自动压缩。
+本插件面向 DSH **`0.1.5-rc.2`** 的 Web 界面（Windows / Linux / macOS）编写，依赖官方右侧栏标签系统（`sidebar-right` 的 `sidebarRightTabs` / `sidebar.right.pane.tab`）。用户气泡走宿主 token `--dsw-specific-bubble`，只有会话发送按钮与侧边栏淡出层仍按当前客户端产物的哈希类名覆盖（`.uV2eYG_primary` / `.bhn1Oq_fade`，二者在 0.1.5-rc.2 仍然存在），**DSH 大版本升级后建议在「外观美化」里复核这两处**；布局引擎按宿主稳定的 `data-slot` 锚点与两列网格交互，并在每次操作前重新定位宿主框架，因此任意插件热重载导致的宿主重渲染都能自愈。背景图以压缩后的 data URL 存在浏览器 `localStorage`（约 5MB 配额内），超大图片上传时会自动压缩。
 
 ## 开发者
 
@@ -65,6 +65,12 @@ dsh plugin --profile web remove dsh-ui-beautify
 **插件接入规范**：[`docs/plugin-panel-integration.md`](docs/plugin-panel-integration.md) 是 `sidebarPanel` 服务（`apiVersion = 1`）的完整契约，包含最小骨架、面板定义字段、API 表、`mount` 生命周期、与官方右侧栏的关系、反模式清单与自测清单；`package.json` 的 `files` 已包含 `docs`，文档随包发布。改这个 API 时必须同步更新它——消费方要用 cordis 的可选依赖写法 `ctx.inject(['sidebarPanel'], (c) => { const s = c.get('sidebarPanel'); const d = s.registerPanel(def); return () => d() })`（注意回调必须是箭头函数），既不要把 `sidebarPanel` 写进 `inject: [...]`，也不要用 `ctx.get('sidebarPanel')` 做身份比对。
 
 ## 更新日志
+
+### v3.0.1
+- **修复：目标面板里的用户气泡不跟随配色预设。** 预设原来只按 chat 包的哈希类名 `.Sixlwa_bubble` 覆盖气泡底色，而 0.1.5-rc.2 把用户气泡收进宿主 token `--dsw-specific-bubble`，chat 与 goal 两个包共用它。现在预设把该 token 一并写入覆盖，目标面板的气泡也跟随预设；同时去掉一处会在宿主重建后失效的哈希类名依赖（发送按钮无对应 token，保留类名覆盖）。
+- **修复：`SHEET` 样式在卸载 / 热重载后残留。** 面板正文布局契约（`.dsh-sidebar-panel-host` 与 `@container dshpanel`）的 disposer 从未被调用，每次重载都会在 `<head>` 留下一个样式节点。现在随外观清理一起释放。
+- **修复：背景图超出 `localStorage` 配额时的回退路径自相矛盾。** 旧实现先把【旧背景】写回存储（屏幕上是新图、存储里是旧图），压缩成功后只改内存里的 `bg.dataUrl` 而不重建 CSS，于是屏幕与存储长期不一致、刷新后突然变样；异步回调还会读取可变的 `bg`。现在压缩成功后重新走 `setBackgroundFromDataUrl` 重建 CSS 并持久化，并在回调里确认背景仍是同一张图。
+- 说明：本插件无宿主依赖（Host 半区为空壳），因此不需要 peer 声明；兼容面为 0.1.5-rc.2。
 
 ### v3.0.0
 - **破坏性变更：卡片布局引擎整体移除。** 侧栏 / 对话区 / 停靠卡的拖动、吸附、浮动、缩放，布局模式开关，以及卡片的持久化状态全部删除。`lib/client.js` 从 117,362 字节降到 32,618 字节（2176 → 638 行）。
