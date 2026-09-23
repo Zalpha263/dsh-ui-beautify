@@ -62,6 +62,9 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ## 更新日志
 
+### v3.0.2
+- 修复：DSH 0.1.7 新增的「插件」管理页整页没有底色，铺了背景图时卡片与文字直接压在原图上、无法辨读。宿主的中列（`.pI_x6G_centerCol`）不画底，每个 `main` 槽页面需自绘，而该页（`PluginManagerPage` 的 `.X_2TxG_page`）没有任何 `background`。现按对话页同一个 token 给它补面（`[data-plugin-panel]{background:var(--dsw-alias-bg-base)}`），随背景图一起注入与卸载。
+
 ### v3.0.1
 - 修复：目标面板里的用户气泡不跟随配色预设（改用宿主 token `--dsw-specific-bubble`，chat 与 goal 共用），并去掉一处会在宿主重建后失效的哈希类名依赖。
 - 修复：`SHEET` 样式在卸载 / 热重载后残留；背景图超出 `localStorage` 配额时的回退路径不再自相矛盾（过去会把旧背景写回存储、屏幕与存储长期不一致）。
