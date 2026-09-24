@@ -52,7 +52,7 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ## 兼容性
 
-面向 DSH `0.1.5-rc.2` 的 Web 界面编写，依赖官方右侧栏标签系统（`sidebarRightTabs` / `sidebar.right.pane.tab`）。用户气泡走宿主 token `--dsw-specific-bubble`；只有会话发送按钮和侧边栏淡出层仍按当前客户端产物的哈希类名覆盖（`.uV2eYG_primary` / `.bhn1Oq_fade`，在 0.1.5-rc.2 仍然存在），**DSH 大版本升级后建议在「外观美化」里复核这两处**。背景图以压缩后的 data URL 存在 `localStorage`（约 5MB 配额内）。
+面向 DSH `0.1.7-rc.1` 的 Web 界面编写，依赖官方右侧栏标签系统（`sidebarRightTabs` / `sidebar.right.pane.tab`，前者是**服务**）。用户气泡走宿主 token `--dsw-specific-bubble`；只有会话发送按钮和侧边栏淡出层仍按当前客户端产物的哈希类名覆盖（`.uV2eYG_primary` / `.bhn1Oq_fade`，已在 0.1.7-rc.1 产物中复核仍然存在），**DSH 大版本升级后建议在「外观美化」里复核这两处**。背景图以压缩后的 data URL 存在 `localStorage`（约 5MB 配额内）。
 
 ## 开发者
 
@@ -61,6 +61,12 @@ dsh plugin --profile web remove dsh-ui-beautify
 **插件接入规范**：[docs/plugin-panel-integration.md](docs/plugin-panel-integration.md) 是 `sidebarPanel`（`apiVersion = 1`）的完整契约。消费方要用 cordis 的可选依赖写法 `ctx.inject(['sidebarPanel'], (c) => { const s = c.get('sidebarPanel'); const d = s.registerPanel(def); return () => d() })`（回调必须是箭头函数），既不要把 `sidebarPanel` 写进 `inject: [...]`，也不要用 `ctx.get('sidebarPanel')` 做身份比对。改这个 API 时必须同步更新该文档。
 
 ## 更新日志
+
+### v3.0.3
+- 迁移：对齐 DSH `0.1.7-rc.1`（自 `0.1.7-alpha.2`）。纯客户端插件，逐项复核 rc.1 产物：`slots.inject` / `slots.register`、`theme` 服务未变；`sidebarRight` / `sidebarRightTabs`（**是服务不是 slot**，由官方 `dsh-client-ui-sidebar-right` 提供）未变；本插件自己 `ctx.provide('sidebarPanel')` 的插件间契约不受宿主影响。
+- 复核哈希类名覆盖：`.uV2eYG_primary`（官方 `dsh-client-ui-conversation`）与 `.bhn1Oq_fade`（官方 `dsh-client-ui-workspace`）在 **rc.1 产物中仍然存在**，发送按钮与侧栏淡出层两处覆盖继续有效；`--dsw-specific-bubble` 同样仍在。
+- 未采用：rc.1 新增的 12 个 `--dsw-alias-file-diff-*` CSS 变量（纯加法，与本插件无关）。
+- 验证：隔离 `DSH_HOME` 冷启动 rc.1 → 模块已注册、客户端产物 HTTP 200 且含 `__ModuleLoader__.load`。
 
 ### v3.0.2
 - 修复：DSH 0.1.7 新增的「插件」管理页整页没有底色，铺了背景图时卡片与文字直接压在原图上、无法辨读。宿主的中列（`.pI_x6G_centerCol`）不画底，每个 `main` 槽页面需自绘，而该页（`PluginManagerPage` 的 `.X_2TxG_page`）没有任何 `background`。现按对话页同一个 token 给它补面（`[data-plugin-panel]{background:var(--dsw-alias-bg-base)}`），随背景图一起注入与卸载。

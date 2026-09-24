@@ -1,7 +1,7 @@
 {
   "name": "dsh-ui-beautify",
   "description": "Customize the DeepSeek Harness web UI: theme color presets (main area, sidebar, message bubble, send button), full-page background image, and a sidebarPanel service that lets other plugins register as official right-Sidebar tabs. All reversible and light/dark aware.",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
