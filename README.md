@@ -23,7 +23,7 @@
 
 ## 安装
 
-要求：DSH `0.1.5-rc.2` 及以上（本插件针对带官方右侧栏的 Web 客户端编写）与 [pnpm](https://pnpm.io/zh/)。
+要求：DSH `0.1.7` 系列或 `0.2.0` 系列（已在 `0.1.7-rc.2` 与 `0.2.0-rc.1` 上实测；本插件不声明 `peerDependencies`，宿主的兼容检查对没有该字段的插件直接放行，因此两个宿主都不存在「被静默跳过」的问题）与 [pnpm](https://pnpm.io/zh/)。
 
 ```bash
 # 发布态：钉死提交，最稳定
@@ -39,6 +39,8 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 装完**重启 DSH**，打开「设置 → UI设置」即可。改完源码只需刷新页面（本插件全部逻辑在浏览器侧，无构建步骤）。
 
+**桌面版（DeepSeek Harness 桌面应用）**：`desktop` profile 由桌面应用独占，`dsh plugin --profile desktop ...` 会被 CLI 直接拒绝（`profile "desktop" is managed exclusively by the Electron application`）。请在桌面应用侧边栏的**插件**页里用**绝对路径**添加本插件目录（或 GitHub 仓库地址），装完重启应用生效。桌面应用自带 Node / pnpm 运行时并走应用内更新（不依赖 npm 全局安装），它的 DSH 版本可能与全局 CLI 不同（实测桌面 `0.2.0-rc.1`、全局 CLI `0.1.7-rc.2`），本插件对两者都通过兼容检查。
+
 ## 常见问题
 
 | 问题 | 原因与解决 |
@@ -52,7 +54,7 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ## 兼容性
 
-面向 DSH `0.1.7-rc.1` 的 Web 界面编写，依赖官方右侧栏标签系统（`sidebarRightTabs` / `sidebar.right.pane.tab`，前者是**服务**）。用户气泡走宿主 token `--dsw-specific-bubble`；只有会话发送按钮和侧边栏淡出层仍按当前客户端产物的哈希类名覆盖（`.uV2eYG_primary` / `.bhn1Oq_fade`，已在 0.1.7-rc.1 产物中复核仍然存在），**DSH 大版本升级后建议在「外观美化」里复核这两处**。背景图以压缩后的 data URL 存在 `localStorage`（约 5MB 配额内）。
+面向 DSH `0.1.7` / `0.2.0` 系列的 Web 界面编写，依赖官方右侧栏标签系统（`sidebarRightTabs` / `sidebar.right.pane.tab`，前者是**服务**）。用户气泡走宿主 token `--dsw-specific-bubble`；只有会话发送按钮和侧边栏淡出层仍按客户端产物的哈希类名覆盖：`.uV2eYG_primary` 出自 `@deepseek-ai/dsh-client-ui-conversation` 的客户端产物，`.bhn1Oq_fade` 出自 `@deepseek-ai/dsh-client-ui-workspace` 的客户端产物。这两处**已实测**：在 `0.2.0-rc.1` 宿主上抓取 boot manifest 广告的全部 83 个客户端产物，两个类名均仍存在（产物 rev `cf69ca49decf` / `1a8f018dea37`），`--dsw-specific-bubble` 也仍在 `dsh-client-ui-theme` 产物中。**DSH 大版本升级后建议在「外观美化」里复核这两处**。背景图以压缩后的 data URL 存在 `localStorage`（约 5MB 配额内）。
 
 ## 开发者
 
@@ -64,7 +66,8 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ### v3.0.4
 - **适配桌面版（文档级，无代码改动）**：本插件**不声明 `peerDependencies`**，而桌面版的兼容检查（`evaluatePluginCompatibility`）在没有该字段时直接返回 undefined → 两个宿主（web `0.1.7-rc.2`、桌面 `0.2.0-rc.1`）都通过，不存在「静默跳过」问题。
-- 走廊核对（`0.1.7-rc.1 → 0.1.7-rc.2 → 0.2.0-rc.1`）：`theme` 服务的成员集未变（仅注入的 CSS 文本有增补，含 `html[data-platform=darwin]` 的桌面菜单色）；`slots.inject` / `slots.register` 未变；`sidebarRight` / `sidebarRightTabs` 的提供方 `dsh-client-ui-sidebar-right` 的 `lib/index.js` 逐字节相同、无公开成员被移除；本插件自提供的 `sidebarPanel` 插件间契约不受宿主影响。哈希类名覆盖（`.uV2eYG_primary` / `.bhn1Oq_fade`）在本走廊内未失效。
+- 走廊核对（`0.1.7-rc.1 → 0.1.7-rc.2 → 0.2.0-rc.1`）：`theme` 服务的成员集未变（仅注入的 CSS 文本有增补，含 `html[data-platform=darwin]` 的桌面菜单色）；`slots.inject` / `slots.register` 未变；`sidebarRight` / `sidebarRightTabs` 的提供方 `dsh-client-ui-sidebar-right` 的 `lib/index.js` 逐字节相同、无公开成员被移除；本插件自提供的 `sidebarPanel` 插件间契约不受宿主影响。
+- 哈希类名覆盖改为**实测取证**（先前草案里写的「本走廊内未失效」是错误措辞：走廊比对集只含 20 个包，而这两个类名所属的 `dsh-client-ui-conversation` / `dsh-client-ui-workspace` **不在其中**，无法从比对结果推断）：在 `0.2.0-rc.1` 宿主上抓取 boot manifest 广告的全部 83 个客户端产物，`.uV2eYG_primary` 仍出现在 `dsh-client-ui-conversation` 的产物（rev `cf69ca49decf`）、`.bhn1Oq_fade` 仍出现在 `dsh-client-ui-workspace` 的产物（rev `1a8f018dea37`）。
 - 桌面版安装方式：`desktop` profile 由桌面应用独占，`dsh plugin --profile desktop ...` 会被 CLI 拒绝；请在桌面应用的**插件**页用**绝对路径**添加本插件目录。
 
 ### v3.0.3
