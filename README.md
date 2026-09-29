@@ -62,6 +62,11 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ## 更新日志
 
+### v3.0.4
+- **适配桌面版（文档级，无代码改动）**：本插件**不声明 `peerDependencies`**，而桌面版的兼容检查（`evaluatePluginCompatibility`）在没有该字段时直接返回 undefined → 两个宿主（web `0.1.7-rc.2`、桌面 `0.2.0-rc.1`）都通过，不存在「静默跳过」问题。
+- 走廊核对（`0.1.7-rc.1 → 0.1.7-rc.2 → 0.2.0-rc.1`）：`theme` 服务的成员集未变（仅注入的 CSS 文本有增补，含 `html[data-platform=darwin]` 的桌面菜单色）；`slots.inject` / `slots.register` 未变；`sidebarRight` / `sidebarRightTabs` 的提供方 `dsh-client-ui-sidebar-right` 的 `lib/index.js` 逐字节相同、无公开成员被移除；本插件自提供的 `sidebarPanel` 插件间契约不受宿主影响。哈希类名覆盖（`.uV2eYG_primary` / `.bhn1Oq_fade`）在本走廊内未失效。
+- 桌面版安装方式：`desktop` profile 由桌面应用独占，`dsh plugin --profile desktop ...` 会被 CLI 拒绝；请在桌面应用的**插件**页用**绝对路径**添加本插件目录。
+
 ### v3.0.3
 - 迁移：对齐 DSH `0.1.7-rc.1`（自 `0.1.7-alpha.2`）。纯客户端插件，逐项复核 rc.1 产物：`slots.inject` / `slots.register`、`theme` 服务未变；`sidebarRight` / `sidebarRightTabs`（**是服务不是 slot**，由官方 `dsh-client-ui-sidebar-right` 提供）未变；本插件自己 `ctx.provide('sidebarPanel')` 的插件间契约不受宿主影响。
 - 复核哈希类名覆盖：`.uV2eYG_primary`（官方 `dsh-client-ui-conversation`）与 `.bhn1Oq_fade`（官方 `dsh-client-ui-workspace`）在 **rc.1 产物中仍然存在**，发送按钮与侧栏淡出层两处覆盖继续有效；`--dsw-specific-bubble` 同样仍在。
