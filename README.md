@@ -1,12 +1,11 @@
 # dsh-ui-beautify
 
-给 DSH 的 Web 界面换一套更顺眼的外观：配色预设、整页背景图；同时它还是其他插件接入 **DSH 官方右侧栏**的统一入口。所有改动都存在浏览器本地，随时可以一键还原。
+给 DSH 的 Web 界面换一套更顺眼的外观：配色预设、整页背景图。所有改动都存在浏览器本地，随时可以一键还原。
 
 ## 能做什么
 
 - **配色预设**：内置四套（默认 / 深海蓝 / 暖沙 / 松石绿），浅色与深色各有适配。切换时不只是换背景和气泡，DSH 界面里的蓝色强调元素（文件夹图标、加载动画、标签高亮、链接等）也会一起换成预设色。
 - **整页背景图**：上传一张本地图片，插件自动压缩到最长边 2560px 以内，并给上层文字加可读遮罩；侧边栏与主区都会显示。
-- **插件面板入口**：其他插件通过 `sidebarPanel` 服务把自己注册成官方右侧栏的标签页。标签条、增删、横向溢出、浮动、分屏、每会话独立状态都由官方负责；本插件只提供统一的注册入口和标签正文的布局契约，**不接管任何列几何**。
 - **随时还原**：配色与背景图存在浏览器 `localStorage`，刷新或重启 DSH 都会自动恢复；「重置全部」回到出厂状态，卸载插件后注入的样式会被移除。
 
 ## 使用说明
@@ -47,22 +46,26 @@ dsh plugin --profile web remove dsh-ui-beautify
 | --- | --- |
 | 「设置」里没有「UI设置」 | 安装后没有重启 DSH；重启后再看 |
 | 卡片布局 / 布局模式去哪了？ | 3.0.0 起整体移除：拖卡片要改写官方 AppFrame 的列宽，而那正是官方右侧栏申领的资源，两边互相覆盖就是过去「面板与侧边栏冲突」的根因 |
-| 插件面板去哪了？ | 2.0.0 起它不再是独立面板，插件界面成了官方右侧栏的标签页，在右侧栏「开始」页的入口胶囊里点开 |
+| `sidebarPanel` 服务去哪了？ | 4.0.0 起整体移除。插件面板本来就注册在**官方**右侧栏上（`sidebarRightTabs` + `sidebar.right.pane.tab`），中间那层适配只会造成「关掉本插件，别的插件就没右侧栏入口」。第三方插件请直接对接官方服务，见 `@deepseek-ai/dsh-client-ui-sidebar-right` 的 README「扩展席位」 |
 | 换浏览器 / 清缓存后设置不见了 | 设置存在浏览器 `localStorage`，属预期行为 |
 | 卸载后还有样式残留 | 先硬刷新（Ctrl+F5） |
 | 其他插件热重载后界面异常 | 引擎会自动重新接管，最迟 1 秒恢复；仍异常请硬刷新并反馈 |
 
 ## 兼容性
 
-面向 DSH `0.1.7` / `0.2.0` 系列的 Web 界面编写，依赖官方右侧栏标签系统（`sidebarRightTabs` / `sidebar.right.pane.tab`，前者是**服务**）。用户气泡走宿主 token `--dsw-specific-bubble`；只有会话发送按钮和侧边栏淡出层仍按客户端产物的哈希类名覆盖：`.uV2eYG_primary` 出自 `@deepseek-ai/dsh-client-ui-conversation` 的客户端产物，`.bhn1Oq_fade` 出自 `@deepseek-ai/dsh-client-ui-workspace` 的客户端产物。这两处**已实测**：在 `0.2.0-rc.1` 宿主上抓取 boot manifest 广告的全部 83 个客户端产物，两个类名均仍存在（产物 rev `cf69ca49decf` / `1a8f018dea37`），`--dsw-specific-bubble` 也仍在 `dsh-client-ui-theme` 产物中。**DSH 大版本升级后建议在「外观美化」里复核这两处**。背景图以压缩后的 data URL 存在 `localStorage`（约 5MB 配额内）。
+面向 DSH `0.1.7` / `0.2.0` 系列的 Web 界面编写，**4.0.0 起不再触碰右侧栏**（面板注册服务已移除，本插件只做配色与背景图）。用户气泡走宿主 token `--dsw-specific-bubble`；只有会话发送按钮和侧边栏淡出层仍按客户端产物的哈希类名覆盖：`.uV2eYG_primary` 出自 `@deepseek-ai/dsh-client-ui-conversation` 的客户端产物，`.bhn1Oq_fade` 出自 `@deepseek-ai/dsh-client-ui-workspace` 的客户端产物。这两处**已实测**：在 `0.2.0-rc.1` 宿主上抓取 boot manifest 广告的全部 83 个客户端产物，两个类名均仍存在（产物 rev `cf69ca49decf` / `1a8f018dea37`），`--dsw-specific-bubble` 也仍在 `dsh-client-ui-theme` 产物中。**DSH 大版本升级后建议在「外观美化」里复核这两处**。背景图以压缩后的 data URL 存在 `localStorage`（约 5MB 配额内）。
 
 ## 开发者
 
-单文件实现：Host 半区 `lib/index.js` 是空壳（仅用于注册），全部逻辑在 `lib/client.js`。这是手写的 `__ModuleLoader__.load` 格式、不是构建产物，改完刷新页面即可生效。调色板在 `PRESETS` 常量里；`SHEET` 只保留标签正文的布局契约（`.dsh-sidebar-panel-host`）。三个 effect 分别是外观清理、`ctx.provide('sidebarPanel')`、以及把已注册面板绑到官方右侧栏的 `bindPanelHost`。
-
-**插件接入规范**：[docs/plugin-panel-integration.md](docs/plugin-panel-integration.md) 是 `sidebarPanel`（`apiVersion = 1`）的完整契约。消费方要用 cordis 的可选依赖写法 `ctx.inject(['sidebarPanel'], (c) => { const s = c.get('sidebarPanel'); const d = s.registerPanel(def); return () => d() })`（回调必须是箭头函数），既不要把 `sidebarPanel` 写进 `inject: [...]`，也不要用 `ctx.get('sidebarPanel')` 做身份比对。改这个 API 时必须同步更新该文档。
+单文件实现：Host 半区 `lib/index.js` 是空壳（仅用于注册），全部逻辑在 `lib/client.js`。这是手写的 `__ModuleLoader__.load` 格式、不是构建产物，改完刷新页面即可生效。调色板在 `PRESETS` 常量里；effect 只剩一个外观清理（CSS disposer + 背景图 + 设置恢复），不再有任何跨插件服务。
 
 ## 更新日志
+
+### v4.0.0
+- **破坏性变更：移除 `sidebarPanel` 服务与整套面板宿主机制** —— `registerPanel` / `has` / `openPanel` / `focusPanel` / `closePanel` / `isOpen`，面板正文的 CSS 契约（`.dsh-sidebar-panel-host` 与 `@container dshpanel`），标签类型绑定与重绑（`bindPanelToHost` / `syncPanels` / `panelSeatAlive` / `internal/service` 监听 + 1s 轮询），以及 `ctx.provide('sidebarPanel')`。
+- 原因：这一层适配把「插件面板」和「ui-beautify 是否安装」绑在了一起 —— 关掉本插件，其他插件的面板就没有右侧栏入口。官方服务由 `@deepseek-ai/dsh-web-app` 的 `ui-sidebar-right` 行**始终提供**，中间层没有存在价值；消费方请改为直接调 `ctx.sidebarRightTabs.register({...})` + `ctx.slots.register({ name: 'sidebar.right.pane.tab', key: id }, Body)`。
+- 本插件现在**只保留配色预设与整页背景图**：不再触碰右侧栏、不再提供任何跨插件服务。
+- 删除文档：`docs/plugin-panel-integration.md`（`sidebarPanel` 契约）。
 
 ### v3.0.4
 - **适配桌面版（文档级，无代码改动）**：本插件**不声明 `peerDependencies`**，而桌面版的兼容检查（`evaluatePluginCompatibility`）在没有该字段时直接返回 undefined → 两个宿主（web `0.1.7-rc.2`、桌面 `0.2.0-rc.1`）都通过，不存在「静默跳过」问题。
