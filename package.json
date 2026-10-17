@@ -1,14 +1,18 @@
 {
   "name": "dsh-ui-beautify",
-  "description": "Customize the DeepSeek Harness web UI: theme color presets (main area, sidebar, message bubble, send button) and a full-page background image. All reversible and light/dark aware.",
-  "version": "4.1.0",
+  "description": "Customize the DeepSeek Harness web UI: theme color presets (main area, sidebar, message bubble, send button and its hover) and a full-page background image. Settings are persisted by the DSH host, mirrored into browser localStorage as a cache, and all changes are reversible and light/dark aware.",
+  "version": "4.2.0",
   "type": "module",
   "main": "lib/index.js",
+  "icon": "./icon.svg",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
+  },
+  "scripts": {
+    "test": "node test/state.test.mjs"
   },
   "dsh": {
     "client": {
@@ -17,6 +21,15 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "engines": {
+    "dsh": ">=0.2.0-rc.1 <0.3.0-0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.1 <0.3.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.1"
   },
   "keywords": [
     "dsh",
@@ -30,6 +43,8 @@
   "files": [
     "lib",
     "locale",
+    "test",
+    "icon.svg",
     "README.md",
     "LICENSE",
     "cordis.patch.yml"
