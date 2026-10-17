@@ -1,13 +1,14 @@
 {
   "name": "dsh-ui-beautify",
   "description": "Customize the DeepSeek Harness web UI: theme color presets (main area, sidebar, message bubble, send button) and a full-page background image. All reversible and light/dark aware.",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "dsh": {
     "client": {
@@ -28,7 +29,7 @@
   "license": "MIT",
   "files": [
     "lib",
-    "docs",
+    "locale",
     "README.md",
     "LICENSE",
     "cordis.patch.yml"

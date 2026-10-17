@@ -22,7 +22,7 @@
 
 ## 安装
 
-要求：DSH `0.1.7` 系列或 `0.2.0` 系列（已在 `0.1.7-rc.2` 与 `0.2.0-rc.1` 上实测；本插件不声明 `peerDependencies`，宿主的兼容检查对没有该字段的插件直接放行，因此两个宿主都不存在「被静默跳过」的问题）与 [pnpm](https://pnpm.io/zh/)。
+要求：DSH `0.2.0` 系列（已在 `0.2.0-rc.1`（web 宿主 / npm 全局 CLI）与 `0.2.0-rc.2`（桌面应用内建运行时）上实测；本插件不声明 `peerDependencies`，宿主的兼容检查对没有该字段的插件直接放行，因此不存在「被静默跳过」的问题）与 [pnpm](https://pnpm.io/zh/)。
 
 ```bash
 # 发布态：钉死提交，最稳定
@@ -53,13 +53,27 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 ## 兼容性
 
-面向 DSH `0.1.7` / `0.2.0` 系列的 Web 界面编写，**4.0.0 起不再触碰右侧栏**（面板注册服务已移除，本插件只做配色与背景图）。用户气泡走宿主 token `--dsw-specific-bubble`；只有会话发送按钮和侧边栏淡出层仍按客户端产物的哈希类名覆盖：`.uV2eYG_primary` 出自 `@deepseek-ai/dsh-client-ui-conversation` 的客户端产物，`.bhn1Oq_fade` 出自 `@deepseek-ai/dsh-client-ui-workspace` 的客户端产物。这两处**已实测**：在 `0.2.0-rc.1` 宿主上抓取 boot manifest 广告的全部 83 个客户端产物，两个类名均仍存在（产物 rev `cf69ca49decf` / `1a8f018dea37`），`--dsw-specific-bubble` 也仍在 `dsh-client-ui-theme` 产物中。**DSH 大版本升级后建议在「外观美化」里复核这两处**。背景图以压缩后的 data URL 存在 `localStorage`（约 5MB 配额内）。
+面向 DSH `0.2.0` 系列的 Web 界面编写，**4.0.0 起不再触碰右侧栏**（面板注册服务已移除，本插件只做配色与背景图）。全部效果都通过官方主题服务 `ctx.theme.overrideTokens()` 写入：用户气泡走 `--dsw-specific-bubble`，发送按钮走 `--dsw-alias-button-info-fill`（0.2.0-rc.2 的会话主按钮就是 `background:var(--dsw-alias-button-info-fill)`），侧边栏淡出层走结构化选择器 `[data-slot="sidebar.workspaces"]`。
+
+**4.1.0 起不再依赖任何 CSS 模块哈希类名**（`.uV2eYG_primary` / `.bhn1Oq_fade` 在 0.2.0-rc.2 的产物里已不存在，上游每次构建都会改哈希）。这条是硬约束：**升级 DSH 后若某处外观不再跟随预设，先查是不是又去写了哈希类名**。
+
+风险登记：预设里的 17 个 token 中，7 个在官方 14 token 目录内，其余 10 个（`--dsw-alias-state-business-primary/-tertiary`、`--dsw-alias-brand-primary-new-colorprimary-new-color`、`--dsw-alias-label-primary-bluish`、`--dsw-alias-button-info-fill`、`--dsw-specific-sidebar-nav-item-active-accent`、`--dsw-static-deepseek-500/450/200`、`--dsw-specific-bubble`）是上游样式表的内部变量——`overrideTokens()` 不校验名字所以今天有效，但它们不在公开面上，**每次 DSH 升级都要复核**（清单与复核方法见 `lib/client.js` 头部注释）。
+
+背景图以压缩后的 data URL 存在 `localStorage`（约 5MB 配额内）。
 
 ## 开发者
 
 单文件实现：Host 半区 `lib/index.js` 是空壳（仅用于注册），全部逻辑在 `lib/client.js`。这是手写的 `__ModuleLoader__.load` 格式、不是构建产物，改完刷新页面即可生效。调色板在 `PRESETS` 常量里；effect 只剩一个外观清理（CSS disposer + 背景图 + 设置恢复），不再有任何跨插件服务。
 
 ## 更新日志
+
+### v4.1.0
+- 删除两个已失效的哈希类覆盖（`.uV2eYG_primary`、`.bhn1Oq_fade`）：两者在 `0.2.0-rc.2` 里都不存在。
+- 发送按钮改由官方 token `--dsw-alias-button-info-fill` 驱动（各预设已写入），不再写类名。
+- 删除 `SETTINGS_RESTORE_CSS`：其目标 `[data-slot="sidebar.settings"]` 不是设置面板（面板被 portal 到 body），规则打不到。
+- 删除 `ctx.get("theme")` / `ctx.get("slots")` 死守卫（`inject` 已保证就绪）；面板文案去掉写死的 v1.9.0。
+- 新增 locale 元数据；`files` 去掉已不存在的 `docs`。
+- 文件头新增「未公开 token 清单 + 每次升级复核」风险登记。
 
 ### v4.0.0
 - **破坏性变更：移除 `sidebarPanel` 服务与整套面板宿主机制** —— `registerPanel` / `has` / `openPanel` / `focusPanel` / `closePanel` / `isOpen`，面板正文的 CSS 契约（`.dsh-sidebar-panel-host` 与 `@container dshpanel`），标签类型绑定与重绑（`bindPanelToHost` / `syncPanels` / `panelSeatAlive` / `internal/service` 监听 + 1s 轮询），以及 `ctx.provide('sidebarPanel')`。
