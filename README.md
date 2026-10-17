@@ -24,7 +24,7 @@
 
 要求：DSH `>=0.2.0-rc.1 <0.3.0-0`（`engines.dsh`；上界 `-0` 显式排除 0.3.0 预发布 已声明，同时保留 `@deepseek-ai/dsh-typert-protocol` 的 `peerDependencies`，因为 `0.2.0-rc.2` 的兼容检查只认 peer）与 [pnpm](https://pnpm.io/zh/)。
 
-已核对宿主（静态契约核对，安装后仍需在目标宿主冒烟）：**`0.2.0-rc.2`**（web 宿主 / npm 全局 CLI）与 **`0.2.1-rc.1`**（桌面应用内建运行时，含 Host 持久化）。两个版本都不需要构建、不需要 `npm install`。
+已核对宿主（静态契约核对，安装后仍需在目标宿主冒烟）：**`0.2.0-rc.2`**（web 宿主 / npm 全局 CLI）与 **`0.2.1-rc.2`**（桌面应用当前内建运行时，含 Host 持久化；上一轮静态核对基线 `0.2.1-rc.1`）。两个版本都不需要构建、不需要 `npm install`。
 
 ```bash
 # 发布态：钉死提交，最稳定
@@ -40,7 +40,7 @@ dsh plugin --profile web remove dsh-ui-beautify
 
 装完**重启 DSH**，打开「设置 → UI设置」即可。改完源码只需刷新页面（无构建步骤；Host 半区是普通 ESM，重启 DSH 生效）。
 
-**桌面版（DeepSeek Harness 桌面应用）**：`desktop` profile 由桌面应用独占，`dsh plugin --profile desktop ...` 会被 CLI 直接拒绝（`profile "desktop" is managed exclusively by the Electron application`）。请在桌面应用侧边栏的**插件**页里用**绝对路径**添加本插件目录（或 GitHub 仓库地址），装完重启应用生效。桌面应用自带 Node / pnpm 运行时并走应用内更新（不依赖 npm 全局安装），它的 DSH 版本可能与全局 CLI 不同（实测桌面 `0.2.1-rc.1`、web 宿主 `0.2.0-rc.2`），本插件对两者都通过兼容检查。
+**桌面版（DeepSeek Harness 桌面应用）**：`desktop` profile 由桌面应用独占，`dsh plugin --profile desktop ...` 会被 CLI 直接拒绝（`profile "desktop" is managed exclusively by the Electron application`）。请在桌面应用侧边栏的**插件**页里用**绝对路径**添加本插件目录（或 GitHub 仓库地址），装完重启应用生效。桌面应用自带 Node / pnpm 运行时并走应用内更新（不依赖 npm 全局安装），它的 DSH 版本可能与全局 CLI 不同（当前实测桌面 `0.2.1-rc.2`、web 宿主 `0.2.0-rc.2`），本插件对两者都通过兼容检查。
 
 ## 常见问题
 
